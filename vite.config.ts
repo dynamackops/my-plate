@@ -1,4 +1,4 @@
-import { cp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { cp, mkdir, rm } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
@@ -22,18 +22,7 @@ function sitesOutput(): Plugin {
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
       }
-      await writeFile(resolve(server, 'index.js'), `
-const worker = {
-  async fetch(request, env) {
-    const response = await env.ASSETS.fetch(request);
-    if (response.status !== 404 || request.method !== 'GET') return response;
-    const acceptsHtml = (request.headers.get('accept') || '').includes('text/html');
-    if (!acceptsHtml) return response;
-    return env.ASSETS.fetch(new Request(new URL('/index.html', request.url), request));
-  },
-};
-export default worker;
-`)
+      await cp(resolve('server'), server, { recursive: true })
     },
   }
 }
