@@ -20,6 +20,7 @@ space, making overload easier to recognize before adding something new.
 - Manual capacity sizes from 5 to 40 points
 - Guided estimates based on time, complexity, effort, and recovery needs
 - Optional AI-powered **Capacity Assist** estimates with explicit user confirmation
+- Conversational **Plate Assistant** for brain-dump setup and reviewable bulk edits
 - Built-in browser dictation and Wispr Flow-ready title and description fields
 - Add, edit, complete, postpone, move, and remove item actions
 - Subtasks with visible progress
@@ -129,6 +130,20 @@ Wispr Flow’s direct transcription API currently requires approved developer
 access. A future direct API integration should keep its credential server-side,
 as Capacity Assist does; the current integration works immediately with the
 standard Wispr Flow app and avoids adding another backend dependency.
+
+### Brain-dump setup and conversational edits
+
+Choose **Brain dump** to paste, type, dictate, or use Wispr Flow to describe
+everything taking up space at once. Plate Assistant receives the message and
+the items on the current planning period, then returns a structured proposal of
+additions, edits, and removals. Every proposed change is shown with its reason
+and can be selected or rejected individually. Nothing is added, edited, or
+removed until the user confirms the proposal.
+
+When sample data is still visible, confirming new brain-dump items replaces the
+samples so the first real setup does not require a separate cleanup step. Later,
+the same assistant can handle requests such as moving an item to Waiting,
+changing a due date, breaking a project into steps, or removing an item.
 
 ## Available commands
 

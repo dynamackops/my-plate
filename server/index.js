@@ -1,9 +1,11 @@
 import { handleCapacityAssist } from './capacity-assist.js'
+import { handlePlateAssistant } from './plate-assistant.js'
 
 const worker = {
   async fetch(request, env) {
     const url = new URL(request.url)
     if (url.pathname === '/api/capacity-assist') return handleCapacityAssist(request, env)
+    if (url.pathname === '/api/plate-assistant') return handlePlateAssistant(request, env)
 
     const response = await env.ASSETS.fetch(request)
     if (response.status !== 404 || request.method !== 'GET') return response
