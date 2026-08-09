@@ -19,6 +19,8 @@ space, making overload easier to recognize before adding something new.
 - Gentle fullness states from **Open** to **Overflowing**
 - Manual capacity sizes from 5 to 40 points
 - Guided estimates based on time, complexity, effort, and recovery needs
+- Optional AI-powered **Capacity Assist** estimates with explicit user confirmation
+- Built-in browser dictation and Wispr Flow-ready title and description fields
 - Add, edit, complete, postpone, move, and remove item actions
 - Subtasks with visible progress
 - Search, status filters, and sorting controls
@@ -27,7 +29,7 @@ space, making overload easier to recognize before adding something new.
 - Focus Display for a monitor, smart display, or always-visible home screen
 - Reduced motion, large text, high contrast, and density preferences
 - Responsive layouts for desktop, tablet, and mobile
-- Browser-local persistence with no account or backend required
+- Browser-local persistence; Capacity Assist remains entirely optional
 
 ## Capacity model
 
@@ -61,9 +63,9 @@ The overall plate uses calm, nonjudgmental fullness states:
 - Lucide React
 - LocalStorage
 
-The MVP has no authentication, payments, analytics, AI APIs, or backend
-services. Its state layer is intentionally separated so remote persistence can
-be introduced later.
+The app has no authentication, payments, or analytics. Its state layer remains
+browser-local; the only server request is an optional Capacity Assist estimate
+that runs when a user chooses to ask for one.
 
 ## Run locally
 
@@ -78,10 +80,55 @@ be introduced later.
 git clone https://github.com/dynamackops/my-plate.git
 cd my-plate
 npm install
+npm run test
 npm run dev
 ```
 
 Vite will print the local development address in the terminal.
+
+### Capacity Assist setup
+
+Capacity Assist sends the task title and description (when present) plus the
+five answers entered in its panel to a server-side endpoint. The endpoint calls
+the OpenAI Responses API with strict structured output and validates that the
+result is exactly one of Tiny (5), Small (10), Medium (20), Large (30), or Extra
+Large (40). The API key is read only by the deployed worker and is never placed
+in frontend code.
+
+Copy the example environment file and add a server-side OpenAI API key:
+
+```bash
+cp .env.example .env
+```
+
+```dotenv
+OPENAI_API_KEY=your_server_side_api_key
+# Optional; defaults to gpt-4o-mini
+OPENAI_MODEL=gpt-4o-mini
+```
+
+For the hosted Sites worker, configure the same values as server runtime
+secrets/environment variables. A plain Vite development server serves only the
+frontend, so AI requests will show the designed unavailable-state message
+unless `/api/capacity-assist` is provided by a compatible local worker runtime.
+All manual task creation and capacity controls continue to work without these
+variables or when the AI service is unavailable.
+
+### Voice input and Wispr Flow
+
+The task title and description include two optional voice paths:
+
+- **Dictate** uses the browser’s Web Speech API when it is available. Browser
+  support varies, and some browsers send microphone audio to their speech
+  service for recognition.
+- **Wispr Flow** focuses the chosen field so an installed Wispr Flow desktop or
+  mobile client can insert text using the user’s existing Flow shortcut or
+  keyboard. No Wispr credential is stored by My Plate.
+
+Wispr Flow’s direct transcription API currently requires approved developer
+access. A future direct API integration should keep its credential server-side,
+as Capacity Assist does; the current integration works immediately with the
+standard Wispr Flow app and avoids adding another backend dependency.
 
 ## Available commands
 
@@ -89,26 +136,43 @@ Vite will print the local development address in the terminal.
 npm run dev      # Start the development server
 npm run build    # Create a production build
 npm run lint     # Run static code checks
+npm run test     # Test Capacity Assist validation and failure handling
 npm run preview  # Preview the production build locally
 ```
 
 ## Privacy
 
 My Plate stores tasks and preferences in the current browser using
-LocalStorage. Data is not sent to a server, but it is also not synchronized
-between devices. Clearing browser storage will clear the saved plate.
+LocalStorage. Data is not synchronized between devices, and clearing browser
+storage will clear the saved plate. When—and only when—a user selects Capacity
+Assist, the information visible in that panel is sent to the configured AI
+service to generate the requested estimate.
 
 ## Project structure
 
 ```text
 src/
 ├── App.tsx       # Dashboard and interactive components
+├── CapacityAssist.tsx # Optional AI estimate panel
+├── capacity-assist.ts # AI request types, client, and response validation
 ├── store.ts      # Zustand state and local persistence
 ├── lib.ts        # Capacity, date, and suggestion logic
 ├── types.ts      # Core application data types
 ├── index.css     # Design system and responsive styles
 └── main.tsx      # React entry point
+server/
+├── capacity-assist.js # Server-only OpenAI request and validation
+└── index.js      # Worker routes and static application fallback
 ```
+
+## Responsible AI
+
+My Plate uses AI to help interpret workload information a user chooses to
+provide. It does not diagnose users, make health decisions, or judge whether a
+task should be done. AI-generated capacity estimates are informational,
+optional, and editable. A suggestion never changes a task until the user
+explicitly confirms it, and the existing manual capacity controls remain
+available at all times. You know your capacity best.
 
 ## Roadmap
 

@@ -14,6 +14,7 @@ import {
   Filter,
   Focus,
   LayoutList,
+  Mic,
   MoreHorizontal,
   Pause,
   Plus,
@@ -26,8 +27,10 @@ import {
   X,
 } from 'lucide-react'
 import { categoryMeta, createPeriodId, formatDueDate, getFullness, getPeriodRange, suggestedActions } from './lib'
+import { CapacityAssist } from './CapacityAssist'
 import { usePlateStore } from './store'
 import { categories, type Category, type ItemCategory, type ItemStatus, type PlateItem, type PeriodType } from './types'
+import { useDictation, type DictationTarget } from './useDictation'
 
 const capacityOptions = [
   { value: 5, label: 'Tiny', hint: 'A quick, light lift' },
@@ -348,16 +351,33 @@ interface FormState {
   multipleSteps: boolean; mentalEffort: number; emotionalEffort: number; socialEffort: number; sensoryEffort: number; recoveryNeeded: boolean; subtasks: string[]
 }
 
+function VoiceActions({ target, supported, listening, onDictate, onWispr }: { target: DictationTarget; supported: boolean; listening: boolean; onDictate: () => void; onWispr: () => void }) {
+  return <div className="voice-actions" aria-label={`Voice options for ${target}`}>
+    <button type="button" className={listening ? 'listening' : ''} onClick={onDictate} disabled={!supported} title={supported ? `Dictate ${target}` : 'Browser dictation is unavailable; Wispr Flow still works'} aria-pressed={listening}><Mic size={14} /> {listening ? 'Listening…' : 'Dictate'}</button>
+    <button type="button" className="wispr-button" onClick={onWispr}><Sparkles size={14} /> Wispr Flow</button>
+  </div>
+}
+
 function ItemModal({ item, periodId, initialCategory, onClose }: { item: PlateItem | null; periodId: string; initialCategory: ItemCategory; onClose: () => void }) {
   const addItem = usePlateStore((state) => state.addItem)
   const updateItem = usePlateStore((state) => state.updateItem)
   const [guidedOpen, setGuidedOpen] = useState(false)
+  const [assistOpen, setAssistOpen] = useState(false)
   const [subtask, setSubtask] = useState('')
+  const capacityPickerRef = useRef<HTMLFieldSetElement>(null)
+  const titleInputRef = useRef<HTMLInputElement>(null)
+  const descriptionInputRef = useRef<HTMLTextAreaElement>(null)
   const [form, setForm] = useState<FormState>({
     title: item?.title ?? '', description: item?.description ?? '', category: item?.category ?? initialCategory, status: item?.status ?? (initialCategory === 'waiting' ? 'waiting' : 'active'),
     capacityPoints: item?.capacityPoints ?? 10, icon: item?.icon ?? categoryMeta[initialCategory].icon, dueDate: item?.dueDate ?? '', estimatedTime: item?.estimatedTime ?? '15-30',
     multipleSteps: (item?.subtasks.length ?? 0) > 1, mentalEffort: item?.mentalEffort ?? 1, emotionalEffort: item?.emotionalEffort ?? 1, socialEffort: item?.socialEffort ?? 1, sensoryEffort: item?.sensoryEffort ?? 1, recoveryNeeded: item?.recoveryNeeded ?? false,
     subtasks: item?.subtasks.map((task) => task.title) ?? [],
+  })
+  const dictation = useDictation((target, transcript) => {
+    setForm((current) => {
+      const existing = current[target].trimEnd()
+      return { ...current, [target]: existing ? `${existing} ${transcript}` : transcript }
+    })
   })
   const suggested = scoreEstimate(form.estimatedTime, form.multipleSteps, form.mentalEffort, form.emotionalEffort, form.socialEffort, form.sensoryEffort, form.recoveryNeeded)
   const setField = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm((current) => ({ ...current, [key]: value }))
@@ -394,13 +414,30 @@ function ItemModal({ item, periodId, initialCategory, onClose }: { item: PlateIt
         <div className="modal-header"><div><p className="eyebrow">{item ? 'MAKE A CHANGE' : 'WHAT ARE YOU CARRYING?'}</p><h2 id="item-modal-title">{item ? 'Edit item' : 'Add to your plate'}</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><X size={20} /></button></div>
         <form onSubmit={submit}>
           <div className="form-body">
-            <label className="field full"><span>Item title <b>*</b></span><input autoFocus value={form.title} onChange={(event) => setField('title', event.target.value)} placeholder="e.g. Book dentist appointment" required /></label>
+            <div className="field full voice-field">
+              <div className="field-label-row"><label htmlFor="item-title">Item title <b>*</b></label><VoiceActions target="title" supported={dictation.supported} listening={dictation.listeningTarget === 'title'} onDictate={() => dictation.start('title')} onWispr={() => dictation.prepareWispr('title', () => titleInputRef.current?.focus())} /></div>
+              <input id="item-title" ref={titleInputRef} autoFocus value={form.title} onChange={(event) => setField('title', event.target.value)} placeholder="e.g. Book dentist appointment" required />
+              {dictation.feedback?.target === 'title' && <p className="voice-feedback" role="status">{dictation.feedback.text}</p>}
+            </div>
             <div className="form-grid">
               <label className="field"><span>Category <b>*</b></span><select value={form.category} onChange={(event) => { const category = event.target.value as ItemCategory; setField('category', category); if (!item) setField('icon', categoryMeta[category].icon) }}>{Object.keys(categoryMeta).map((category) => <option key={category} value={category}>{categoryMeta[category as ItemCategory].label}</option>)}</select></label>
               <label className="field"><span>Status</span><select value={form.status} onChange={(event) => setField('status', event.target.value as ItemStatus)}><option value="active">Active</option><option value="waiting">Waiting</option><option value="postponed">Postponed</option><option value="completed">Completed</option></select></label>
             </div>
-            <fieldset className="capacity-picker"><legend>How much space does this take? <b>*</b></legend><div>{capacityOptions.map((option) => <button type="button" className={form.capacityPoints === option.value ? 'selected' : ''} onClick={() => setField('capacityPoints', option.value)} key={option.value}><strong>{option.value}</strong><span>{option.label}</span><small>{option.hint}</small></button>)}</div></fieldset>
-            <button type="button" className="guided-toggle" onClick={() => setGuidedOpen(!guidedOpen)} aria-expanded={guidedOpen}><span><Sparkles size={18} /> Not sure? Get a guided estimate</span><ChevronDown size={18} className={guidedOpen ? 'rotate' : ''} /></button>
+            <fieldset className="capacity-picker" ref={capacityPickerRef}><legend>How much space does this take? <b>*</b></legend><div>{capacityOptions.map((option) => <button type="button" className={form.capacityPoints === option.value ? 'selected' : ''} onClick={() => setField('capacityPoints', option.value)} key={option.value}><strong>{option.value}</strong><span>{option.label}</span><small>{option.hint}</small></button>)}</div></fieldset>
+            <div className="estimator-actions">
+              <button type="button" className={`assist-toggle ${assistOpen ? 'active' : ''}`} onClick={() => { setAssistOpen(!assistOpen); setGuidedOpen(false) }} aria-expanded={assistOpen} aria-controls="capacity-assist-panel"><Sparkles size={18} /> Help me estimate</button>
+              <button type="button" className="guided-toggle" onClick={() => { setGuidedOpen(!guidedOpen); setAssistOpen(false) }} aria-expanded={guidedOpen}><span>Use the manual guide</span><ChevronDown size={18} className={guidedOpen ? 'rotate' : ''} /></button>
+            </div>
+            {assistOpen && <div id="capacity-assist-panel"><CapacityAssist
+              title={form.title}
+              description={form.description}
+              onUse={(points) => { setField('capacityPoints', points); setAssistOpen(false) }}
+              onChooseDifferent={() => {
+                setAssistOpen(false)
+                requestAnimationFrame(() => capacityPickerRef.current?.querySelector<HTMLButtonElement>('button.selected')?.focus())
+              }}
+              onCancel={() => setAssistOpen(false)}
+            /></div>}
             {guidedOpen && <div className="guided-panel">
               <div className="guided-intro"><div><strong>Suggested capacity: {suggested} points</strong><span>Based on your answers below</span></div><button type="button" onClick={() => setField('capacityPoints', suggested)}>Use suggestion</button></div>
               <div className="form-grid">
@@ -410,7 +447,12 @@ function ItemModal({ item, periodId, initialCategory, onClose }: { item: PlateIt
               <div className="effort-grid">{([['mentalEffort', 'Mental effort'], ['emotionalEffort', 'Emotional effort'], ['socialEffort', 'Social effort'], ['sensoryEffort', 'Sensory effort']] as const).map(([key, label]) => <label className="field" key={key}><span>{label}</span><select value={form[key]} onChange={(event) => setField(key, Number(event.target.value))}><option value={1}>Low</option><option value={2}>Medium</option><option value={3}>High</option></select></label>)}</div>
               <label className="switch-row"><input type="checkbox" checked={form.recoveryNeeded} onChange={(event) => setField('recoveryNeeded', event.target.checked)} /><span>I’ll need recovery time afterward</span></label>
             </div>}
-            <label className="field full"><span>Description <em>Optional</em></span><textarea value={form.description} onChange={(event) => setField('description', event.target.value)} placeholder="Add any context that would make this easier to return to…" rows={3} /></label>
+            <div className="field full voice-field">
+              <div className="field-label-row"><label htmlFor="item-description">Description <em>Optional</em></label><VoiceActions target="description" supported={dictation.supported} listening={dictation.listeningTarget === 'description'} onDictate={() => dictation.start('description')} onWispr={() => dictation.prepareWispr('description', () => descriptionInputRef.current?.focus())} /></div>
+              <textarea id="item-description" ref={descriptionInputRef} value={form.description} onChange={(event) => setField('description', event.target.value)} placeholder="Add any context that would make this easier to return to…" rows={3} />
+              {dictation.feedback?.target === 'description' && <p className="voice-feedback" role="status">{dictation.feedback.text}</p>}
+              <p className="voice-privacy">Browser dictation may use your browser’s speech service. Wispr Flow inserts text into the focused field using your existing Flow setup.</p>
+            </div>
             <div className="form-grid">
               <label className="field"><span>Due date <em>Optional</em></span><input type="date" value={form.dueDate} onChange={(event) => setField('dueDate', event.target.value)} /></label>
               <div className="field"><span>Icon</span><div className="icon-picker">{icons.map((icon) => <button type="button" key={icon} className={form.icon === icon ? 'selected' : ''} onClick={() => setField('icon', icon)} aria-label={`Use ${icon} icon`}>{icon}</button>)}</div></div>
