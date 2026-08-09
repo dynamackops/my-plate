@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import {
   ArrowLeft,
   ArrowRight,
+  BrainCircuit,
   CalendarDays,
   Check,
   CheckCircle2,
@@ -28,6 +29,7 @@ import {
 } from 'lucide-react'
 import { categoryMeta, createPeriodId, formatDueDate, getFullness, getPeriodRange, suggestedActions } from './lib'
 import { CapacityAssist } from './CapacityAssist'
+import { PlateAssistant } from './PlateAssistant'
 import { usePlateStore } from './store'
 import { categories, type Category, type ItemCategory, type ItemStatus, type PlateItem, type PeriodType } from './types'
 import { useDictation, type DictationTarget } from './useDictation'
@@ -54,7 +56,7 @@ function scoreEstimate(time: string, multipleSteps: boolean, mental: number, emo
 function App() {
   const store = usePlateStore()
   const [selectedCategory, setSelectedCategory] = useState<Category>('all')
-  const [modal, setModal] = useState<'add' | 'edit' | 'settings' | null>(null)
+  const [modal, setModal] = useState<'add' | 'edit' | 'settings' | 'assistant' | null>(null)
   const [selectedItem, setSelectedItem] = useState<PlateItem | null>(null)
   const [editingItem, setEditingItem] = useState<PlateItem | null>(null)
   const [focusMode, setFocusMode] = useState(false)
@@ -99,6 +101,7 @@ function App() {
         </a>
         <div className="header-actions">
           <button className="quiet-button hide-mobile" onClick={() => setFocusMode(true)}><Focus size={17} /> Focus display</button>
+          <button className="soft-button assistant-entry hide-mobile" onClick={() => setModal('assistant')}><BrainCircuit size={18} /> Brain dump</button>
           <button className="icon-button" onClick={() => setModal('settings')} aria-label="Open settings"><Settings size={20} /></button>
           <button className="primary-button hide-mobile" onClick={openAdd}><Plus size={18} /> Add item</button>
         </div>
@@ -119,6 +122,12 @@ function App() {
             onOffset={store.setPeriodOffset}
           />
         </section>
+
+        {store.hasSampleData && <section className="brain-dump-callout" aria-labelledby="brain-dump-heading">
+          <span className="brain-dump-icon"><BrainCircuit size={24} /></span>
+          <div><p className="eyebrow">SKIP THE STEP-BY-STEP SETUP</p><h2 id="brain-dump-heading">Start with everything on your mind.</h2><p>Type, paste, or talk through the whole messy list. Plate Assistant will organize it into a proposal you can review before replacing the sample items.</p></div>
+          <button className="primary-button" onClick={() => setModal('assistant')}><Sparkles size={17} /> Start a brain dump</button>
+        </section>}
 
         <CapacitySummary
           points={totalPoints}
@@ -152,7 +161,7 @@ function App() {
         </section>
       </main>
 
-      <button className="mobile-add" onClick={openAdd}><Plus size={21} /> Add item</button>
+      <div className="mobile-actions"><button className="mobile-assistant" onClick={() => setModal('assistant')}><BrainCircuit size={20} /> Brain dump</button><button className="mobile-add" onClick={openAdd}><Plus size={21} /> Add item</button></div>
 
       {(modal === 'add' || modal === 'edit') && (
         <ItemModal
@@ -163,6 +172,7 @@ function App() {
         />
       )}
       {modal === 'settings' && <SettingsPanel onClose={() => setModal(null)} />}
+      {modal === 'assistant' && <PlateAssistant items={currentItems} periodId={periodId} hasSampleData={store.hasSampleData} onClose={() => setModal(null)} />}
       {selectedItem && <ItemDetails item={store.items.find((item) => item.id === selectedItem.id) ?? selectedItem} onClose={() => setSelectedItem(null)} onEdit={openEdit} />}
     </div>
   )
@@ -375,6 +385,7 @@ function ItemModal({ item, periodId, initialCategory, onClose }: { item: PlateIt
   })
   const dictation = useDictation((target, transcript) => {
     setForm((current) => {
+      if (target === 'assistant') return current
       const existing = current[target].trimEnd()
       return { ...current, [target]: existing ? `${existing} ${transcript}` : transcript }
     })

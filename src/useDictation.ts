@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 
-export type DictationTarget = 'title' | 'description'
+export type DictationTarget = 'title' | 'description' | 'assistant'
 
 interface SpeechResultEvent {
   results: ArrayLike<{ 0: { transcript: string } }>
